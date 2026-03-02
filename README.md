@@ -103,6 +103,8 @@ TickerBot-Live/
 ├── README.md
 └── banner.png       # Optional Discord banner
 
+Extra files such as 'metric.py' file will let you explore what other parameters Yahoo Finance is able to offer to include in your main code. (I did not want to make this output more clutered anymorer).
+
 ## 📌 Credits
 
 discord.py
