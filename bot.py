@@ -183,5 +183,5 @@ while True:
         bot.run(TOKEN)
     except Exception as e:
         print("Bot crashed:", e)
-        print("Sleeping for 60 seconds before retrying...")
-        time.sleep(60)
+        print("Sleeping for 300 seconds before retrying...")
+        time.sleep(300)
