@@ -171,10 +171,17 @@ def keep_alive():
 keep_alive()
 
 # My Bot Login Should Use ENV Variable
+import time
 
 TOKEN = os.getenv("DISCORD_TOKEN")
 
 if not TOKEN:
     raise ValueError("DISCORD_TOKEN not found in .env file")
 
-bot.run(TOKEN)
+while True:
+    try:
+        bot.run(TOKEN)
+    except Exception as e:
+        print("Bot crashed:", e)
+        print("Sleeping for 60 seconds before retrying...")
+        time.sleep(60)
