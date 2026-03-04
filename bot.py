@@ -2,16 +2,40 @@ import discord
 from discord.ext import commands
 import yfinance as yf
 import pandas as pd
-
-from dotenv import load_dotenv
 import os
+import time
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
+from dotenv import load_dotenv
 
+# Load .env locally (Render ignores it, uses ENV vars)
 load_dotenv()
+
+TOKEN = os.getenv("DISCORD_TOKEN")
+PORT = int(os.environ.get("PORT", 10000))
+
+if not TOKEN:
+    raise ValueError("DISCORD_TOKEN not found")
+
+# -------- Minimal HTTP Server for Render --------
+class Handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"TickerBot is running")
+
+def run_http():
+    server = HTTPServer(("0.0.0.0", PORT), Handler)
+    server.serve_forever()
+
+threading.Thread(target=run_http, daemon=True).start()
+# -------------------------------------------------
 
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
+# ---------------- Utility Functions ----------------
 
 def format_number(value):
     if value is None:
@@ -26,7 +50,6 @@ def format_number(value):
     except:
         return "N/A"
 
-
 def format_percent(value):
     if value is None:
         return "N/A"
@@ -34,7 +57,6 @@ def format_percent(value):
         return f"{value * 100:.2f}%"
     except:
         return "N/A"
-
 
 def calculate_trend(price, ma200, earnings_growth):
     try:
@@ -52,7 +74,6 @@ def calculate_peg(pe_ratio, earnings_growth):
         if pe_ratio is None or earnings_growth is None:
             return "N/A"
 
-        # If growth is decimal (0.20), convert to percent (20)
         if -1 < earnings_growth < 1:
             growth_percent = earnings_growth * 100
         else:
@@ -63,9 +84,10 @@ def calculate_peg(pe_ratio, earnings_growth):
 
         peg = pe_ratio / growth_percent
         return round(peg, 2)
-
     except:
         return "N/A"
+
+# ---------------- Command ----------------
 
 @bot.command()
 async def watch(ctx, symbol: str):
@@ -76,37 +98,28 @@ async def watch(ctx, symbol: str):
         info = ticker.info
         fast = ticker.fast_info
 
-        # Basic Info
         company_name = info.get("longName", "N/A")
         exchange = info.get("exchange", "N/A")
         market_cap = fast.get("marketCap")
         current_price = fast.get("lastPrice")
 
-        # Valuation
         pe_ratio = info.get("trailingPE")
         earnings_growth = info.get("earningsGrowth")
         peg_ratio = calculate_peg(pe_ratio, earnings_growth)
         eps = info.get("trailingEps")
 
-        # Balance Sheet
         total_cash = info.get("totalCash")
         total_debt = info.get("totalDebt")
         debt_to_equity = info.get("debtToEquity")
         current_ratio = info.get("currentRatio")
         quick_ratio = info.get("quickRatio")
 
-        # Growth
         revenue = info.get("totalRevenue")
-        earnings_growth = info.get("earningsGrowth")
-
-        # Quality
         roe = info.get("returnOnEquity")
 
-        # 52 Week
         week_high = fast.get("yearHigh")
         week_low = fast.get("yearLow")
 
-        # 200-day Moving Average
         hist = ticker.history(period="1y")
         ma200 = hist["Close"].rolling(window=200).mean().iloc[-1]
 
@@ -138,50 +151,24 @@ Exchange: {exchange}
 
 📡 Trend Signal: {trend_signal}
 """
-
         await ctx.send(response)
 
     except Exception as e:
         print(e)
         await ctx.send("Error retrieving data. Check ticker symbol.")
 
+# ---------------- Events ----------------
 
 @bot.event
 async def on_ready():
-    print(f"TickerBot is live as {bot.user}")
+    print(f"{bot.user} has connected to Discord!")
 
-
-# Adding Flask Web Server for Render
-from flask import Flask
-from threading import Thread
-
-app = Flask(__name__)
-
-@app.route('/')
-def home():
-    return "Watcher is running!"
-
-def run():
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
-
-def keep_alive():
-    t = Thread(target=run)
-    t.start()
-
-keep_alive()
-
-# My Bot Login Should Use ENV Variable
-import time
-
-TOKEN = os.getenv("DISCORD_TOKEN")
-
-if not TOKEN:
-    raise ValueError("DISCORD_TOKEN not found in .env file")
+# ---------------- Safe Run Loop ----------------
 
 while True:
     try:
         bot.run(TOKEN)
     except Exception as e:
         print("Bot crashed:", e)
-        print("Sleeping for 300 seconds before retrying...")
+        print("Retrying in 300 seconds...")
         time.sleep(300)
